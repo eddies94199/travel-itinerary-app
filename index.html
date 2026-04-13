@@ -73,6 +73,7 @@
             const [twdRate, setTwdRate] = useState(32.5);
             const [isSyncing, setIsSyncing] = useState(false);
             
+            // 預設全小寫標題
             const [tripSettings, setTripSettings] = useState({
                 topLabel: "2026 LA TRIP",
                 itineraryTitle: "journey.",
@@ -102,60 +103,78 @@
                 }), { dist: 0, time: 0 });
             }, [selectedDayIdx, itinerary]);
 
-            // --- 全自動背景計算邏輯 ---
+            // --- 全自動背景計算邏輯 (套用於所有天數) ---
             useEffect(() => {
                 const timer = setTimeout(async () => {
-                    const nextItinerary = [...itinerary];
-                    let hasChanged = false;
-                    const day = nextItinerary[selectedDayIdx];
-                    if (!day) return;
+                    const nextItinerary = JSON.parse(JSON.stringify(itinerary)); // 深拷貝
+                    let globalChanged = false;
 
                     setIsSyncing(true);
-                    for (let i = 0; i < day.items.length; i++) {
-                        const item = day.items[i];
-                        
-                        // 1. 如果 Title 改變且不為空，自動搜尋座標
-                        if (item.title && item.title.length > 3 && item.title !== item.lastSearchedTitle) {
-                            try {
-                                const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(item.title)}&limit=1`);
-                                const geoData = await geoRes.json();
-                                if (geoData && geoData[0]) {
-                                    item.coords = { lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) };
-                                    item.lastSearchedTitle = item.title;
-                                    hasChanged = true;
-                                }
-                            } catch (e) { console.error("Geocoding failed", e); }
-                        }
 
-                        // 2. 如果目前跟前一個點都有座標，且數據是空的或座標剛更新，自動計算路徑
-                        if (i > 0 && day.items[i-1].coords && item.coords) {
-                            const prev = day.items[i-1];
-                            // 判斷是否需要重新計算 (如果座標點變了)
-                            const coordKey = `${prev.coords.lat},${prev.coords.lng}-${item.coords.lat},${item.coords.lng}`;
-                            if (item.lastRouteKey !== coordKey) {
+                    // 遍歷所有天數
+                    for (let dIdx = 0; dIdx < nextItinerary.length; dIdx++) {
+                        const day = nextItinerary[dIdx];
+                        let dayChanged = false;
+
+                        for (let i = 0; i < day.items.length; i++) {
+                            const item = day.items[i];
+                            
+                            // 1. 背景地點搜尋 (Geocoding)
+                            if (item.title && item.title.length > 2 && item.title !== item.lastSearchedTitle) {
                                 try {
-                                    const routeRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${prev.coords.lng},${prev.coords.lat};${item.coords.lng},${item.coords.lat}?overview=false`);
-                                    const routeData = await routeRes.json();
-                                    if (routeData.routes && routeData.routes[0]) {
-                                        const route = routeData.routes[0];
-                                        item.distMi = Math.round((route.distance / 1609.34) * 10) / 10;
-                                        item.durationMin = Math.round(route.duration / 60);
-                                        item.lastRouteKey = coordKey;
-                                        hasChanged = true;
+                                    const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(item.title)}&limit=1`);
+                                    const geoData = await geoRes.json();
+                                    if (geoData && geoData[0]) {
+                                        item.coords = { lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) };
+                                        item.lastSearchedTitle = item.title;
+                                        dayChanged = true;
+                                        globalChanged = true;
                                     }
-                                } catch (e) { console.error("Routing failed", e); }
+                                } catch (e) { console.error("Geocoding failed", e); }
+                                await new Promise(r => setTimeout(r, 100)); // 避免請求過快
+                            }
+
+                            // 2. 背景路徑計算 (Routing)
+                            // 計算與該天前一個地點的距離
+                            if (i > 0 && day.items[i-1].coords && item.coords) {
+                                const prev = day.items[i-1];
+                                const coordKey = `${prev.coords.lat},${prev.coords.lng}-${item.coords.lat},${item.coords.lng}`;
+                                
+                                if (item.lastRouteKey !== coordKey) {
+                                    try {
+                                        const routeRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${prev.coords.lng},${prev.coords.lat};${item.coords.lng},${item.coords.lat}?overview=false`);
+                                        const routeData = await routeRes.json();
+                                        if (routeData.routes && routeData.routes[0]) {
+                                            const route = routeData.routes[0];
+                                            item.distMi = Math.round((route.distance / 1609.34) * 10) / 10;
+                                            item.durationMin = Math.round(route.duration / 60);
+                                            item.lastRouteKey = coordKey;
+                                            dayChanged = true;
+                                            globalChanged = true;
+                                        }
+                                    } catch (e) { console.error("Routing failed", e); }
+                                    await new Promise(r => setTimeout(r, 100));
+                                }
+                            } else if (i === 0) {
+                                // 如果是當天第一個點，清空車程數據
+                                if (item.distMi !== 0 || item.durationMin !== 0) {
+                                    item.distMi = 0;
+                                    item.durationMin = 0;
+                                    dayChanged = true;
+                                    globalChanged = true;
+                                }
                             }
                         }
                     }
 
-                    if (hasChanged) {
+                    if (globalChanged) {
                         setItinerary(nextItinerary);
                     }
                     setIsSyncing(false);
-                }, 1200); // 停止輸入 1.2 秒後執行
+                }, 1500); // 停止輸入 1.5 秒後執行全域同步
 
                 return () => clearTimeout(timer);
-            }, [itinerary, selectedDayIdx]);
+            }, [itinerary]);
 
             const updateDay = (idx, field, val) => {
                 const next = [...itinerary];
@@ -331,11 +350,11 @@
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="space-y-1">
                                                 <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Itinerary Tab</span>
-                                                <input value={tripSettings.itineraryTitle} onChange={e => setTripSettings({...tripSettings, itineraryTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none" />
+                                                <input value={tripSettings.itineraryTitle} onChange={e => setTripSettings({...tripSettings, itineraryTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none uppercase" />
                                             </div>
                                             <div className="space-y-1">
                                                 <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Checklist Tab</span>
-                                                <input value={tripSettings.checklistTitle} onChange={e => setTripSettings({...tripSettings, checklistTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none" />
+                                                <input value={tripSettings.checklistTitle} onChange={e => setTripSettings({...tripSettings, checklistTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none uppercase" />
                                             </div>
                                         </div>
                                     </div>
