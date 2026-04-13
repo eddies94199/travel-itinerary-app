@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>2026 美國世界盃行程助手</title>
     
-    <!-- PWA / App 圖示設定 -->
+    <!-- PWA / App 圖示設定 (這部分的 href="/icon.png" 指向您 GitHub 根目錄下的圖示檔案) -->
     <link rel="apple-touch-icon" href="/icon.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -80,12 +80,13 @@
             const [usdAmount, setUsdAmount] = useState('1');
             const [twdRate, setTwdRate] = useState(32.5);
             
+            // 根據您的要求更新預設文字
             const [tripSettings, setTripSettings] = useState({
-                topLabel: "2026 WORLD CUP TRIP",
-                itineraryTitle: "Journey.",
-                checklistTitle: "Checklist.",
-                utilitiesTitle: "Utilities.",
-                editorTitle: "Editor.",
+                topLabel: "2026 LA TRIP",
+                itineraryTitle: "journey.",
+                checklistTitle: "checklist.",
+                utilitiesTitle: "utilities.",
+                editorTitle: "settings.",
                 daysLeftLabel: "Days Left"
             });
 
@@ -180,7 +181,7 @@
                             </div>
                         </div>
                         <div className="flex justify-between items-end">
-                            <h1 className="text-3xl font-black tracking-tighter text-black leading-none">
+                            <h1 className="text-3xl font-black tracking-tighter text-black leading-none uppercase">
                                 {activeTab === 'itinerary' && tripSettings.itineraryTitle}
                                 {activeTab === 'packing' && tripSettings.checklistTitle}
                                 {activeTab === 'tools' && tripSettings.utilitiesTitle}
@@ -248,45 +249,86 @@
 
                         {activeTab === 'edit' && (
                             <div className="space-y-10 animate-fade-in pt-6 pb-10">
+                                {/* App Icon Setup Tutorial (這是您想找的地方) */}
+                                <section className="space-y-4">
+                                    <div className="flex items-center gap-2 border-b pb-2 text-indigo-500">
+                                        <Icon name="smartphone" size={14}/>
+                                        <h3 className="text-[10px] font-black uppercase tracking-widest">App Icon Setup</h3>
+                                    </div>
+                                    <div className="bg-indigo-50/50 rounded-2xl p-5 space-y-3">
+                                        <p className="text-[11px] leading-relaxed text-slate-600 font-medium">
+                                            要更換手機桌面圖示，請將一張正方形的照片命名為 <code className="bg-white px-1 rounded text-indigo-500">icon.png</code> 並上傳到您的 GitHub 根目錄。
+                                        </p>
+                                        <div className="bg-slate-900 rounded-xl p-4 text-[9px] text-indigo-200 overflow-x-auto font-mono">
+                                            {`<link rel="apple-touch-icon" href="/icon.png">`}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400">完成後，在手機 Safari 點擊「加入主畫面」即可看到圖示。</p>
+                                    </div>
+                                </section>
+
                                 {/* Header Edit */}
                                 <section className="space-y-4">
-                                    <div className="flex items-center gap-2 border-b pb-2"><Icon name="layout" size={14} className="text-indigo-500"/><h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Header Settings</h3></div>
+                                    <div className="flex items-center gap-2 border-b pb-2 text-indigo-500">
+                                        <Icon name="layout" size={14}/>
+                                        <h3 className="text-[10px] font-black uppercase tracking-widest">Header Settings</h3>
+                                    </div>
                                     <div className="grid gap-3">
-                                        <input value={tripSettings.topLabel} onChange={e => setTripSettings({...tripSettings, topLabel: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none" placeholder="Top Label"/>
+                                        <div className="space-y-1">
+                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Top Label</span>
+                                            <input value={tripSettings.topLabel} onChange={e => setTripSettings({...tripSettings, topLabel: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none" />
+                                        </div>
                                         <div className="grid grid-cols-2 gap-3">
-                                            <input value={tripSettings.itineraryTitle} onChange={e => setTripSettings({...tripSettings, itineraryTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none" />
-                                            <input value={tripSettings.checklistTitle} onChange={e => setTripSettings({...tripSettings, checklistTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none" />
+                                            <div className="space-y-1">
+                                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Itinerary Tab</span>
+                                                <input value={tripSettings.itineraryTitle} onChange={e => setTripSettings({...tripSettings, itineraryTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none uppercase" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Checklist Tab</span>
+                                                <input value={tripSettings.checklistTitle} onChange={e => setTripSettings({...tripSettings, checklistTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none uppercase" />
+                                            </div>
                                         </div>
                                     </div>
                                 </section>
 
-                                {/* Itinerary Edit */}
+                                {/* Itinerary Edit - 加大字體與 Header 一致 */}
                                 <section className="space-y-6">
-                                    <div className="flex items-center justify-between border-b pb-2"><div className="flex items-center gap-2"><Icon name="edit-3" size={14} className="text-indigo-500"/><h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Manage Data</h3></div><button onClick={addDay} className="text-[10px] font-black text-indigo-500 uppercase">+ Day</button></div>
+                                    <div className="flex items-center justify-between border-b pb-2 text-indigo-500">
+                                        <div className="flex items-center gap-2">
+                                            <Icon name="edit-3" size={14}/>
+                                            <h3 className="text-[10px] font-black uppercase tracking-widest">Manage Data</h3>
+                                        </div>
+                                        <button onClick={addDay} className="text-[10px] font-black uppercase">+ Add Day</button>
+                                    </div>
                                     {itinerary.map((day, dIdx) => (
                                         <div key={day.id} className="bg-white border rounded-3xl p-6 space-y-4 shadow-sm">
                                             <div className="flex gap-2">
-                                                <input value={day.day} onChange={e => updateDay(dIdx, 'day', e.target.value)} className="w-20 bg-slate-50 p-2 rounded-lg text-[10px] font-black border-none"/>
-                                                <input value={day.location} onChange={e => updateDay(dIdx, 'location', e.target.value)} className="flex-1 bg-slate-50 p-2 rounded-lg text-[10px] font-black border-none"/>
+                                                <input value={day.day} onChange={e => updateDay(dIdx, 'day', e.target.value)} className="w-20 bg-slate-50 p-2 rounded-lg text-xs font-black border-none uppercase"/>
+                                                <input value={day.location} onChange={e => updateDay(dIdx, 'location', e.target.value)} className="flex-1 bg-slate-50 p-2 rounded-lg text-xs font-black border-none"/>
                                             </div>
-                                            <input value={day.date} onChange={e => updateDay(dIdx, 'date', e.target.value)} className="w-full text-base font-bold border-b p-1 border-slate-100" />
+                                            <input value={day.date} onChange={e => updateDay(dIdx, 'date', e.target.value)} className="w-full text-base font-bold border-b p-1 border-slate-100" placeholder="YYYY/MM/DD (週)"/>
                                             
                                             <div className="space-y-4 pt-4">
                                                 {day.items.map((item, iIdx) => (
                                                     <div key={item.id} className="p-4 bg-slate-50 rounded-2xl relative group space-y-3">
                                                         <div className="flex gap-2">
-                                                            <input value={item.time} onChange={e => updateItem(dIdx, iIdx, 'time', e.target.value)} className="w-16 bg-white p-1 rounded-lg text-[10px] font-bold border border-slate-100"/>
-                                                            <input value={item.title} onChange={e => updateItem(dIdx, iIdx, 'title', e.target.value)} className="flex-1 bg-white p-1 rounded-lg text-[10px] font-bold border border-slate-100"/>
+                                                            <input value={item.time} onChange={e => updateItem(dIdx, iIdx, 'time', e.target.value)} className="w-16 bg-white p-2 rounded-lg text-xs font-bold border border-slate-100"/>
+                                                            <input value={item.title} onChange={e => updateItem(dIdx, iIdx, 'title', e.target.value)} className="flex-1 bg-white p-2 rounded-lg text-xs font-bold border border-slate-100"/>
                                                         </div>
-                                                        <textarea value={item.desc} onChange={e => updateItem(dIdx, iIdx, 'desc', e.target.value)} className="w-full bg-white p-2 rounded-lg text-[10px] border border-slate-100 h-16 resize-none" />
-                                                        <div className="grid grid-cols-2 gap-2 text-[9px]">
-                                                            <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-100"><Icon name="car" size={10}/><input type="number" value={item.distMi} onChange={e => updateItem(dIdx, iIdx, 'distMi', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0" placeholder="mi"/></div>
-                                                            <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-slate-100"><Icon name="clock" size={10}/><input type="number" value={item.durationMin} onChange={e => updateItem(dIdx, iIdx, 'durationMin', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0" placeholder="min"/></div>
+                                                        <textarea value={item.desc} onChange={e => updateItem(dIdx, iIdx, 'desc', e.target.value)} className="w-full bg-white p-3 rounded-lg text-xs border border-slate-100 h-16 resize-none" placeholder="Description..."/>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-100">
+                                                                <Icon name="car" size={12} className="text-slate-300"/>
+                                                                <input type="number" value={item.distMi} onChange={e => updateItem(dIdx, iIdx, 'distMi', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-xs font-bold" placeholder="mi"/>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-100">
+                                                                <Icon name="clock" size={12} className="text-slate-300"/>
+                                                                <input type="number" value={item.durationMin} onChange={e => updateItem(dIdx, iIdx, 'durationMin', e.target.value)} className="w-full bg-transparent border-none p-0 focus:ring-0 text-xs font-bold" placeholder="min"/>
+                                                            </div>
                                                         </div>
                                                         <button onClick={() => deleteItem(dIdx, iIdx)} className="absolute -top-2 -right-2 bg-white border rounded-full w-6 h-6 flex items-center justify-center text-rose-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="x" size={12}/></button>
                                                     </div>
                                                 ))}
-                                                <button onClick={() => addItem(dIdx)} className="w-full py-4 border-2 border-dashed border-slate-100 rounded-2xl text-[10px] font-black text-slate-300 hover:text-indigo-400 hover:border-indigo-200 transition-all">+ Add Item</button>
+                                                <button onClick={() => addItem(dIdx)} className="w-full py-4 border-2 border-dashed border-slate-100 rounded-2xl text-[10px] font-black text-slate-300 uppercase tracking-widest hover:text-indigo-500 hover:border-indigo-200 transition-all">+ Add Item</button>
                                             </div>
                                         </div>
                                     ))}
