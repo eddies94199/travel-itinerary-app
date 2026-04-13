@@ -3,12 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 美國世界盃行程助手</title>
+    <title>2026 美國行助手</title>
     
     <!-- PWA / App 圖示設定 -->
-    <link rel="apple-touch-icon" href="/icon.png">
+    <!-- 加入 v=1 參數強制瀏覽器重新抓取新圖示 -->
+    <link rel="apple-touch-icon" href="/icon.png?v=1">
+    <link rel="icon" type="image/png" href="/icon.png?v=1">
+    
+    <!-- 全螢幕 Web App 設定 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="2026 LA">
+    <meta name="theme-color" content="#ffffff">
     
     <!-- 載入必要套件 (CDN) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -80,7 +86,6 @@
             const [usdAmount, setUsdAmount] = useState('1');
             const [twdRate, setTwdRate] = useState(32.5);
             
-            // 已更新預設文字為全小寫
             const [tripSettings, setTripSettings] = useState({
                 topLabel: "2026 LA TRIP",
                 itineraryTitle: "journey.",
@@ -95,7 +100,6 @@
             const [newPackingText, setNewPackingText] = useState("");
             const [weather, setWeather] = useState({ temp: null, pop: null, status: 'loading' });
 
-            // 倒數計算
             const countdown = useMemo(() => {
                 const target = new Date('2026-06-16T21:10:00').getTime();
                 const now = new Date().getTime();
@@ -103,7 +107,6 @@
                 return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
             }, []);
 
-            // 每日統計
             const dailyStats = useMemo(() => {
                 const day = itinerary[selectedDayIdx];
                 if (!day) return { dist: 0, time: 0 };
@@ -113,7 +116,6 @@
                 }), { dist: 0, time: 0 });
             }, [selectedDayIdx, itinerary]);
 
-            // 編輯與功能函數
             const updateDay = (idx, field, val) => {
                 const next = [...itinerary];
                 next[idx] = { ...next[idx], [field]: val };
@@ -143,7 +145,6 @@
                 setItinerary([...itinerary, { id: Date.now(), day: `Day ${nextNum}`, date: "2026/06/--", location: "New Location", coords: { lat: 34.05, lng: -118.24 }, items: [] }]);
             };
 
-            // Checklist 功能
             const togglePacking = (id) => setPackingList(prev => prev.map(item => item.id === id ? { ...item, checked: !item.checked } : item));
             
             const addPackingItem = (e) => {
@@ -157,7 +158,6 @@
                 setPackingList(packingList.filter(item => item.id !== id));
             };
 
-            // 生成路線
             const generateRouteUrl = () => {
                 const day = itinerary[selectedDayIdx];
                 if (!day) return "#";
@@ -166,7 +166,6 @@
                 return `https://www.google.com/maps/dir/?api=1&origin=${locs[0]}&destination=${locs[locs.length - 1]}&waypoints=${locs.slice(1, -1).join('|')}&travelmode=driving`;
             };
 
-            // 天氣抓取
             useEffect(() => {
                 const fetchWeather = async () => {
                     const day = itinerary[selectedDayIdx];
@@ -257,7 +256,6 @@
                                     </div>
                                 </div>
 
-                                {/* List Items */}
                                 <div className="space-y-3">
                                     {packingList.map(item => (
                                         <div key={item.id} className="group relative flex items-center gap-4">
@@ -280,7 +278,6 @@
                                     ))}
                                 </div>
 
-                                {/* Add New Item */}
                                 <form onSubmit={addPackingItem} className="mt-8 flex gap-2 p-1 bg-white border border-slate-100 rounded-2xl shadow-sm focus-within:border-indigo-200 transition-colors">
                                     <input 
                                         type="text" 
@@ -311,7 +308,6 @@
 
                         {activeTab === 'edit' && (
                             <div className="space-y-10 animate-fade-in pt-6 pb-10">
-                                {/* Header Edit */}
                                 <section className="space-y-4">
                                     <div className="flex items-center gap-2 border-b pb-2 text-indigo-500">
                                         <Icon name="layout" size={14}/>
@@ -335,7 +331,6 @@
                                     </div>
                                 </section>
 
-                                {/* Itinerary Edit */}
                                 <section className="space-y-6">
                                     <div className="flex items-center justify-between border-b pb-2 text-indigo-500">
                                         <div className="flex items-center gap-2">
