@@ -238,7 +238,7 @@ export default function App() {
                   }`}
                 >
                   <p className="text-[8px] font-black uppercase tracking-widest mb-0.5">{day.day}</p>
-                  <p className="text-xs font-bold">{day.date.split('/')[2]?.split(' ')[0]}</p>
+                  <p className="text-sm font-bold">{day.date.split('/')[2]?.split(' ')[0]}</p>
                 </button>
               ))}
             </div>
