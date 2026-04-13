@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar, Briefcase, MapPin, Clock, Car, CheckCircle2, 
   Circle, Plus, Trash2, Sun, Cloud, CloudRain, Settings2, 
-  X, Plane, Calculator, Trophy, Map, ChevronRight, Copy, RefreshCw, Droplets, Navigation, Edit3, Layout
+  X, Plane, Calculator, Trophy, Map, ChevronRight, Copy, RefreshCw, Droplets, Navigation, Edit3, Layout, Smartphone, Share
 } from 'lucide-react';
 
 // 初始資料
@@ -138,7 +138,6 @@ export default function App() {
   };
 
   const addNewDay = () => {
-    const lastDay = itinerary[itinerary.length - 1];
     const nextDayNum = itinerary.length + 1;
     const newDay = {
       id: `day-${Date.now()}`,
@@ -181,6 +180,15 @@ export default function App() {
 
   const togglePacking = (id) => setPackingList(prev => prev.map(item => item.id === id ? { ...item, checked: !item.checked } : item));
 
+  const copyToClipboard = (text) => {
+    const el = document.createElement('textarea');
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+  };
+
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-white shadow-2xl overflow-hidden relative font-sans text-slate-900">
       <style dangerouslySetInnerHTML={{ __html: `
@@ -191,7 +199,7 @@ export default function App() {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       `}} />
 
-      {/* Header Section */}
+      {/* Header Section - Compact Design */}
       <header className="px-8 pt-8 pb-4 z-10 bg-white border-b border-slate-50">
         <div className="flex justify-between items-start mb-2">
           <p className="text-[9px] font-black tracking-[0.3em] text-slate-300 uppercase leading-none">{tripSettings.topLabel}</p>
@@ -325,9 +333,40 @@ export default function App() {
           </div>
         )}
 
-        {/* Editor Tab */}
+        {/* Editor Tab - Refined for Pro User */}
         {activeTab === 'edit' && (
           <div className="space-y-10 animate-fade-in pt-4 pb-10">
+            
+            {/* App Icon & Home Screen Section */}
+            <section className="space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                <Smartphone size={16} className="text-indigo-500" />
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">App Icon & Home Screen</h3>
+              </div>
+              <div className="bg-indigo-50/50 rounded-2xl p-5 space-y-4">
+                 <p className="text-[11px] font-medium leading-relaxed text-slate-600">
+                   要加入手機主畫面並顯示圖示，請在 GitHub 的 <b>index.html</b> 的 <b>&lt;head&gt;</b> 中貼入以下代碼，並將 512x512 的圖示命名為 <b>icon.png</b> 上傳至根目錄：
+                 </p>
+                 <div className="bg-slate-900 rounded-xl p-4 relative group">
+                    <pre className="text-[9px] text-indigo-200 overflow-x-auto whitespace-pre-wrap">
+{`<link rel="apple-touch-icon" href="/icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">`}
+                    </pre>
+                    <button 
+                      onClick={() => copyToClipboard('<link rel="apple-touch-icon" href="/icon.png">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="default">')}
+                      className="absolute top-2 right-2 p-2 bg-white/10 rounded-lg text-white hover:bg-white/20 transition-all"
+                    >
+                      <Copy size={12} />
+                    </button>
+                 </div>
+                 <div className="flex items-center gap-2 text-[10px] font-bold text-indigo-600">
+                    <Share size={12} />
+                    <span>完成後在手機 Safari 點擊「加入主畫面」即可</span>
+                 </div>
+              </div>
+            </section>
+
             {/* Header Configuration */}
             <section className="space-y-4">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -336,16 +375,16 @@ export default function App() {
               </div>
               <div className="grid grid-cols-1 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[8px] font-bold text-slate-400 uppercase">Top Label</label>
+                  <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Top Label</label>
                   <input value={tripSettings.topLabel} onChange={(e) => setTripSettings({...tripSettings, topLabel: e.target.value})} className="w-full bg-slate-50 border-none rounded-xl p-3 text-xs font-bold focus:ring-1 focus:ring-indigo-500" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-[8px] font-bold text-slate-400 uppercase">Itinerary Title</label>
+                    <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Itinerary Title</label>
                     <input value={tripSettings.itineraryTitle} onChange={(e) => setTripSettings({...tripSettings, itineraryTitle: e.target.value})} className="w-full bg-slate-50 border-none rounded-xl p-3 text-xs font-bold" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[8px] font-bold text-slate-400 uppercase">Checklist Title</label>
+                    <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Checklist Title</label>
                     <input value={tripSettings.checklistTitle} onChange={(e) => setTripSettings({...tripSettings, checklistTitle: e.target.value})} className="w-full bg-slate-50 border-none rounded-xl p-3 text-xs font-bold" />
                   </div>
                 </div>
@@ -411,7 +450,7 @@ export default function App() {
           <div className="space-y-8 animate-fade-in pt-4">
              <div className="p-8 bg-black rounded-[2.5rem] text-white flex justify-between items-center shadow-2xl">
               <div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Status</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Packing Status</p>
                 <h3 className="text-2xl font-bold tracking-tighter italic">Checklist.</h3>
               </div>
               <div className="text-3xl font-black text-white italic">
@@ -421,7 +460,7 @@ export default function App() {
             <div className="space-y-3">
               {packingList.map(item => (
                 <button key={item.id} onClick={() => togglePacking(item.id)} className={`w-full flex items-center gap-5 p-5 rounded-[1.5rem] border transition-all ${item.checked ? 'bg-slate-50 border-transparent' : 'bg-white border-slate-100 shadow-sm'}`}>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${item.checked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-200'}`}>{item.checked && <CheckCircle2 size={12} strokeWidth={4} />}</div>
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${item.checked ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-200' : 'border-slate-200'}`}>{item.checked && <CheckCircle2 size={12} strokeWidth={4} />}</div>
                   <span className={`text-sm font-bold text-left flex-1 ${item.checked ? 'text-slate-300 line-through' : 'text-slate-900'}`}>{item.text}</span>
                 </button>
               ))}
