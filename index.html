@@ -1,17 +1,376 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>2026 美國行助手</title>
-    <!-- App 圖示設定 -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2026 USA Trip</title>
+    
+    <!-- PWA / App 圖示設定 -->
     <link rel="apple-touch-icon" href="/icon.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    
+    <!-- 載入必要套件 (CDN) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-  </head>
-  <body>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        body { font-family: 'Inter', -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-slate-50">
     <div id="root"></div>
-    <script type="module" src="/main.jsx"></script>
-  </body>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // 這裡手動定義一些 Lucide 圖示，因為 CDN 載入方式不同
+        const Icon = ({ name, size = 16, strokeWidth = 2, className = "" }) => {
+            useEffect(() => {
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            }, [name]);
+            return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
+        };
+
+        const INITIAL_ITINERARY = [
+            {
+                id: 'day-1', day: "Day 1", date: "2026/06/16 (二)", location: "Los Angeles", coords: { lat: 34.0522, lng: -118.2437 },
+                items: [
+                    { id: 'item-1-1', time: "21:10", title: "降落洛杉磯 (LAX)", type: "transport", desc: "辦理入境手續。", mapUrl: "https://www.google.com/maps/search/?api=1&query=Los+Angeles+International+Airport", coords: { lat: 33.9416, lng: -118.4085 } },
+                    { id: 'item-1-2', time: "晚上", title: "入住 Airbnb (Culver City)", type: "spot", desc: "5527 Carlin St。雲端預訂已付。", mapUrl: "https://www.google.com/maps/search/?api=1&query=5527+Carlin+St+Culver+City+LA", coords: { lat: 34.0312, lng: -118.3582 }, distMi: 12, durationMin: 25 }
+                ]
+            },
+            {
+                id: 'day-2', day: "Day 2", date: "2026/06/17 (三)", location: "Los Angeles", coords: { lat: 34.0522, lng: -118.2437 },
+                items: [
+                    { id: 'item-2-1', time: "早上", title: "Getty Center", type: "spot", desc: "美術館與花園。", mapUrl: "https://www.google.com/maps/search/?api=1&query=Getty+Center+Los+Angeles", coords: { lat: 34.0780, lng: -118.4741 }, distMi: 8, durationMin: 20 },
+                    { id: 'item-2-3', time: "黃昏", title: "Griffith Observatory", type: "spot", desc: "看夜景。建議車停 Greek Theater。", mapUrl: "https://www.google.com/maps/search/?api=1&query=Griffith+Observatory", coords: { lat: 34.1184, lng: -118.3004 }, distMi: 15, durationMin: 35 }
+                ]
+            },
+            {
+                id: 'day-3', day: "Day 3", date: "2026/06/18 (四)", location: "Los Angeles", coords: { lat: 34.0522, lng: -118.2437 },
+                items: [
+                    { id: 'item-3-1', time: "11:00", title: "FIFA 瑞士 vs 波赫", type: "match", desc: "SoFi Stadium 比賽開始。", mapUrl: "https://www.google.com/maps/search/?api=1&query=SoFi+Stadium", coords: { lat: 33.9535, lng: -118.3390 }, distMi: 10, durationMin: 30 },
+                    { id: 'item-3-3', time: "黃昏", title: "Santa Monica Pier", type: "spot", desc: "碼頭夕陽與摩天輪。", mapUrl: "https://www.google.com/maps/search/?api=1&query=Santa+Monica+Pier", coords: { lat: 34.0100, lng: -118.4961 }, distMi: 14, durationMin: 40 }
+                ]
+            }
+        ];
+
+        const INITIAL_PACKING = [
+            { id: 1, text: "護照與 ESTA 授權書", checked: false },
+            { id: 2, text: "國際駕照正本", checked: false },
+            { id: 3, text: "電腦與工作金鑰", checked: false },
+            { id: 4, text: "球衣與太陽眼鏡", checked: false },
+            { id: 5, text: "透明提袋 (球場規定)", checked: false },
+        ];
+
+        function App() {
+            const [activeTab, setActiveTab] = useState('itinerary');
+            const [selectedDayIdx, setSelectedDayIdx] = useState(0);
+            const [usdAmount, setUsdAmount] = useState('1');
+            const [twdRate, setTwdRate] = useState(32.5);
+            
+            const [tripSettings, setTripSettings] = useState({
+                topLabel: "2026 WORLD CUP TRIP",
+                itineraryTitle: "Journey.",
+                checklistTitle: "Checklist.",
+                utilitiesTitle: "Utilities.",
+                editorTitle: "Editor.",
+                daysLeftLabel: "Days Left"
+            });
+
+            const [itinerary, setItinerary] = useState(INITIAL_ITINERARY);
+            const [packingList, setPackingList] = useState(INITIAL_PACKING);
+            const [weather, setWeather] = useState({ temp: null, pop: null, status: 'loading' });
+
+            // 倒數計算
+            const countdown = useMemo(() => {
+                const target = new Date('2026-06-16T21:10:00').getTime();
+                const now = new Date().getTime();
+                const diff = target - now;
+                return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+            }, []);
+
+            // 每日統計
+            const dailyStats = useMemo(() => {
+                const day = itinerary[selectedDayIdx];
+                if (!day) return { dist: 0, time: 0 };
+                return day.items.reduce((acc, item) => ({
+                    dist: acc.dist + (Number(item.distMi) || 0),
+                    time: acc.time + (Number(item.durationMin) || 0)
+                }), { dist: 0, time: 0 });
+            }, [selectedDayIdx, itinerary]);
+
+            // 自動生成 Google Maps 路線連結
+            const generateRouteUrl = () => {
+                const day = itinerary[selectedDayIdx];
+                if (!day) return "#";
+                const locs = day.items
+                    .filter(i => i.coords)
+                    .map(i => `${i.coords.lat},${i.coords.lng}`);
+                if (locs.length < 2) return day.items[0]?.mapUrl || "#";
+                const origin = locs[0];
+                const destination = locs[locs.length - 1];
+                const waypoints = locs.slice(1, -1).join('|');
+                return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypoints ? `&waypoints=${waypoints}` : ''}&travelmode=driving`;
+            };
+
+            // 天氣抓取邏輯
+            useEffect(() => {
+                const fetchWeather = async () => {
+                    const day = itinerary[selectedDayIdx];
+                    if (!day?.coords) return;
+                    const tripDate = new Date(day.date.split(' ')[0].replace(/\//g, '-'));
+                    const today = new Date();
+                    const diffDays = Math.ceil((tripDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+                    if (diffDays > 14) {
+                        setWeather({ temp: null, pop: null, status: 'upcoming' });
+                        return;
+                    }
+
+                    setWeather({ ...weather, status: 'loading' });
+                    try {
+                        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${day.coords.lat}&longitude=${day.coords.lng}&current=temperature_2m,weather_code&hourly=precipitation_probability&timezone=auto`);
+                        const data = await res.json();
+                        setWeather({
+                            temp: `${Math.round(data.current.temperature_2m)}°C`,
+                            pop: `${data.hourly.precipitation_probability[0]}%`,
+                            status: 'ready'
+                        });
+                    } catch (e) {
+                        setWeather({ ...weather, status: 'error' });
+                    }
+                };
+                fetchWeather();
+            }, [selectedDayIdx, itinerary]);
+
+            const togglePacking = (id) => setPackingList(prev => prev.map(item => item.id === id ? { ...item, checked: !item.checked } : item));
+
+            return (
+                <div className="flex flex-col h-screen max-w-md mx-auto bg-white shadow-2xl overflow-hidden relative">
+                    {/* Header */}
+                    <header className="px-8 pt-10 pb-6 z-10 bg-white border-b border-slate-50">
+                        <div className="flex justify-between items-start mb-2">
+                            <p className="text-[9px] font-black tracking-[0.3em] text-slate-300 uppercase leading-none">{tripSettings.topLabel}</p>
+                            <div className="flex items-center gap-1 px-2 py-0.5 bg-indigo-50 rounded-full border border-indigo-100">
+                                <div className="w-1 h-1 rounded-full bg-indigo-500 animate-pulse"></div>
+                                <span className="text-[8px] font-black text-indigo-600 uppercase tracking-tighter">Live Tracker</span>
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-end">
+                            <h1 className="text-3xl font-black tracking-tighter text-black leading-none">
+                                {activeTab === 'itinerary' && tripSettings.itineraryTitle}
+                                {activeTab === 'packing' && tripSettings.checklistTitle}
+                                {activeTab === 'tools' && tripSettings.utilitiesTitle}
+                                {activeTab === 'edit' && tripSettings.editorTitle}
+                            </h1>
+                            <div className="text-right">
+                                <p className="text-2xl font-black tracking-tighter text-black leading-none">{countdown}</p>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{tripSettings.daysLeftLabel}</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main Content */}
+                    <main className="flex-1 overflow-y-auto no-scrollbar pb-36 px-8">
+                        {activeTab === 'itinerary' && (
+                            <div className="space-y-6 animate-fade-in pt-6">
+                                {/* Date Selection */}
+                                <div className="flex space-x-2 overflow-x-auto py-1 no-scrollbar">
+                                    {itinerary.map((day, idx) => (
+                                        <button
+                                            key={day.id}
+                                            onClick={() => setSelectedDayIdx(idx)}
+                                            className={`flex-shrink-0 px-4 py-2 rounded-xl transition-all border ${
+                                                selectedDayIdx === idx ? 'bg-black border-black text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400'
+                                            }`}
+                                        >
+                                            <p className="text-[8px] font-black uppercase tracking-widest mb-0.5">{day.day}</p>
+                                            <p className="text-xs font-bold">{day.date.split('/')[2]?.split(' ')[0]}</p>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Weather & Stats Dashboard */}
+                                <div className="space-y-3">
+                                    <div className="bg-slate-50 rounded-[2rem] p-7 border border-slate-100">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-1.5 mb-2">
+                                                    <Icon name="map-pin" size={10} className="text-slate-400" />
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{itinerary[selectedDayIdx].location}</p>
+                                                </div>
+                                                {weather.status === 'upcoming' ? (
+                                                    <h3 className="text-xl font-black text-slate-300 tracking-tight">尚未公佈預報</h3>
+                                                ) : (
+                                                    <div className="flex items-center gap-4">
+                                                        <h3 className="text-4xl font-black tracking-tighter">{weather.temp || '--'}</h3>
+                                                        <div className="h-8 w-[1px] bg-slate-200"></div>
+                                                        <div>
+                                                            <div className="flex items-center gap-1 text-blue-500 font-black">
+                                                                <Icon name="droplets" size={12} />
+                                                                <span className="text-xs">{weather.pop || '--'}</span>
+                                                            </div>
+                                                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">降雨機率</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <Icon name={weather.pop > '20%' ? 'cloud-rain' : 'sun'} size={32} className={weather.pop > '20%' ? 'text-blue-400' : 'text-amber-400'} />
+                                        </div>
+                                    </div>
+
+                                    {/* Stats Grid */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <Icon name="clock" size={12} className="text-indigo-400" />
+                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">總車程</span>
+                                            </div>
+                                            <p className="text-lg font-black tracking-tighter">
+                                                {dailyStats.time >= 60 ? `${Math.floor(dailyStats.time / 60)}h ${dailyStats.time % 60}m` : `${dailyStats.time}m`}
+                                            </p>
+                                        </div>
+                                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <Icon name="navigation" size={12} className="text-emerald-400" />
+                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">總距離</span>
+                                            </div>
+                                            <p className="text-lg font-black tracking-tighter">{dailyStats.dist} mi</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Route Map Button */}
+                                    <a href={generateRouteUrl()} target="_blank" className="flex items-center justify-between w-full bg-black text-white p-5 rounded-2xl active:scale-95 transition-transform shadow-xl">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-white/10 rounded-lg"><Icon name="map" size={18} /></div>
+                                            <div>
+                                                <p className="text-[10px] font-black uppercase tracking-[0.1em] opacity-60">今日路線規劃圖</p>
+                                                <p className="text-sm font-bold tracking-tight">自動串聯導航路徑</p>
+                                            </div>
+                                        </div>
+                                        <Icon name="chevron-right" size={18} className="opacity-40" />
+                                    </a>
+                                </div>
+
+                                {/* Timeline */}
+                                <div className="space-y-10 pt-4 border-t border-slate-50">
+                                    {itinerary[selectedDayIdx]?.items.map((item, idx) => (
+                                        <div key={item.id} className="relative group animate-fade-in" style={{ animationDelay: `${idx * 0.1}s` }}>
+                                            <div className="flex items-start gap-5">
+                                                <div className="pt-1 min-w-[45px]">
+                                                    <span className="text-[8px] font-black text-slate-200 uppercase block mb-1">Time</span>
+                                                    <span className="text-xs font-bold text-black">{item.time}</span>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        {item.type === 'match' && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[8px] font-black rounded-full uppercase border border-amber-100">Big Match</span>}
+                                                        {item.distMi > 0 && <span className="text-[9px] font-bold text-slate-300 flex items-center gap-1"><Icon name="car" size={10} /> +{item.distMi} mi</span>}
+                                                    </div>
+                                                    <h4 className="text-lg font-extrabold tracking-tight mb-1 text-black leading-tight">{item.title}</h4>
+                                                    <p className="text-xs text-slate-500 font-medium leading-relaxed mb-4">{item.desc}</p>
+                                                    {item.mapUrl && (
+                                                        <button onClick={() => window.open(item.mapUrl)} className="flex items-center gap-2 text-[10px] font-bold text-slate-400 hover:text-black">
+                                                            <Icon name="map-pin" size={10} /> View Detail
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'packing' && (
+                            <div className="space-y-8 animate-fade-in pt-6">
+                                <div className="p-8 bg-black rounded-[2.5rem] text-white flex justify-between items-center shadow-2xl">
+                                    <div>
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Progress</p>
+                                        <h3 className="text-2xl font-bold tracking-tighter italic">Checklist.</h3>
+                                    </div>
+                                    <div className="text-3xl font-black italic">
+                                        {Math.round((packingList.filter(i => i.checked).length / Math.max(1, packingList.length)) * 100)}%
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    {packingList.map(item => (
+                                        <button key={item.id} onClick={() => togglePacking(item.id)} className={`w-full flex items-center gap-5 p-5 rounded-[1.5rem] border transition-all ${item.checked ? 'bg-slate-50 border-transparent' : 'bg-white border-slate-100 shadow-sm'}`}>
+                                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${item.checked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-200'}`}>
+                                                {item.checked && <Icon name="check" size={12} strokeWidth={4} />}
+                                            </div>
+                                            <span className={`text-sm font-bold text-left flex-1 ${item.checked ? 'text-slate-300 line-through' : 'text-slate-900'}`}>{item.text}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'tools' && (
+                            <div className="space-y-8 animate-fade-in pt-6">
+                                <div className="bg-slate-50 rounded-[2.5rem] p-10 space-y-10 border border-slate-100">
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Currency Converter</p>
+                                        <div className="flex items-baseline gap-3">
+                                            <span className="text-2xl font-black text-slate-300">$</span>
+                                            <input type="number" value={usdAmount} onChange={e => setUsdAmount(e.target.value)} className="w-full bg-transparent border-none text-6xl font-black tracking-tighter focus:ring-0 p-0 text-black outline-none" />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4 opacity-20"><div className="h-[1px] flex-1 bg-slate-900"></div><Icon name="chevron-down" /><div className="h-[1px] flex-1 bg-slate-900"></div></div>
+                                    <div className="text-right">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">TWD Estimate</p>
+                                        <span className="text-2xl font-black text-slate-200 mr-3">NT$</span>
+                                        <span className="text-6xl font-black tracking-tighter text-black">{(usdAmount * twdRate).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'edit' && (
+                            <div className="py-10 text-center text-slate-400 animate-fade-in pt-6">
+                                <Icon name="settings" size={48} className="mx-auto mb-4 opacity-20" />
+                                <p className="text-sm font-bold">Editor 功能已整合至本頁面代碼</p>
+                                <p className="text-xs mt-2 px-10">您可以直接在此檔案中修改 INITIAL_ITINERARY 來更新您的資料庫。</p>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* Nav Bar */}
+                    <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-2xl shadow-2xl rounded-[2.5rem] flex items-center px-3 py-3 gap-1 z-50 border border-slate-100">
+                        {[
+                            { id: 'itinerary', icon: 'calendar', label: "行程" },
+                            { id: 'packing', icon: 'briefcase', label: "清單" },
+                            { id: 'tools', icon: 'calculator', label: "工具" },
+                            { id: 'edit', icon: 'settings', label: "設定" },
+                        ].map((tab) => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex items-center gap-2 px-5 py-3 rounded-full transition-all duration-500 ${
+                                    activeTab === tab.id ? 'bg-black text-white shadow-xl scale-105' : 'text-slate-300 hover:text-slate-600'
+                                }`}
+                            >
+                                <Icon name={tab.icon} size={16} strokeWidth={activeTab === tab.id ? 2.5 : 2} />
+                                {activeTab === tab.id && <span className="text-[10px] font-black tracking-tighter">{tab.label}</span>}
+                            </button>
+                        ))}
+                    </nav>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
 </html>
