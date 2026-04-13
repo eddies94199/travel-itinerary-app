@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>2026 美國世界盃行程助手</title>
     
-    <!-- PWA / App 圖示設定 (這部分的 href="/icon.png" 指向您 GitHub 根目錄下的圖示檔案) -->
+    <!-- PWA / App 圖示設定 -->
     <link rel="apple-touch-icon" href="/icon.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -80,7 +80,7 @@
             const [usdAmount, setUsdAmount] = useState('1');
             const [twdRate, setTwdRate] = useState(32.5);
             
-            // 根據您的要求更新預設文字
+            // 已更新預設文字為全小寫
             const [tripSettings, setTripSettings] = useState({
                 topLabel: "2026 LA TRIP",
                 itineraryTitle: "journey.",
@@ -92,6 +92,7 @@
 
             const [itinerary, setItinerary] = useState(INITIAL_ITINERARY);
             const [packingList, setPackingList] = useState(INITIAL_PACKING);
+            const [newPackingText, setNewPackingText] = useState("");
             const [weather, setWeather] = useState({ temp: null, pop: null, status: 'loading' });
 
             // 倒數計算
@@ -112,7 +113,7 @@
                 }), { dist: 0, time: 0 });
             }, [selectedDayIdx, itinerary]);
 
-            // 編輯功能
+            // 編輯與功能函數
             const updateDay = (idx, field, val) => {
                 const next = [...itinerary];
                 next[idx] = { ...next[idx], [field]: val };
@@ -140,6 +141,20 @@
             const addDay = () => {
                 const nextNum = itinerary.length + 1;
                 setItinerary([...itinerary, { id: Date.now(), day: `Day ${nextNum}`, date: "2026/06/--", location: "New Location", coords: { lat: 34.05, lng: -118.24 }, items: [] }]);
+            };
+
+            // Checklist 功能
+            const togglePacking = (id) => setPackingList(prev => prev.map(item => item.id === id ? { ...item, checked: !item.checked } : item));
+            
+            const addPackingItem = (e) => {
+                if (e) e.preventDefault();
+                if (!newPackingText.trim()) return;
+                setPackingList([...packingList, { id: Date.now(), text: newPackingText, checked: false }]);
+                setNewPackingText("");
+            };
+
+            const deletePackingItem = (id) => {
+                setPackingList(packingList.filter(item => item.id !== id));
             };
 
             // 生成路線
@@ -181,7 +196,7 @@
                             </div>
                         </div>
                         <div className="flex justify-between items-end">
-                            <h1 className="text-3xl font-black tracking-tighter text-black leading-none uppercase">
+                            <h1 className="text-3xl font-black tracking-tighter text-black leading-none">
                                 {activeTab === 'itinerary' && tripSettings.itineraryTitle}
                                 {activeTab === 'packing' && tripSettings.checklistTitle}
                                 {activeTab === 'tools' && tripSettings.utilitiesTitle}
@@ -231,9 +246,56 @@
                         )}
 
                         {activeTab === 'packing' && (
-                            <div className="space-y-8 animate-fade-in pt-6">
-                                <div className="p-8 bg-black rounded-[2.5rem] text-white flex justify-between items-center shadow-2xl"><div><p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Progress</p><h3 className="text-2xl font-bold tracking-tighter italic">Checklist.</h3></div><div className="text-3xl font-black italic">{Math.round((packingList.filter(i => i.checked).length / Math.max(1, packingList.length)) * 100)}%</div></div>
-                                <div className="space-y-3">{packingList.map(item => (<button key={item.id} onClick={() => togglePacking(item.id)} className={`w-full flex items-center gap-5 p-5 rounded-[1.5rem] border transition-all ${item.checked ? 'bg-slate-50 border-transparent' : 'bg-white border-slate-100 shadow-sm'}`}><div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${item.checked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-200'}`}>{item.checked && <Icon name="check" size={12} strokeWidth={4} />}</div><span className={`text-sm font-bold text-left flex-1 ${item.checked ? 'text-slate-300 line-through' : 'text-slate-900'}`}>{item.text}</span></button>))}</div>
+                            <div className="space-y-6 animate-fade-in pt-6">
+                                <div className="p-8 bg-black rounded-[2.5rem] text-white flex justify-between items-center shadow-2xl">
+                                    <div>
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Progress</p>
+                                        <h3 className="text-2xl font-bold tracking-tighter italic">Checklist.</h3>
+                                    </div>
+                                    <div className="text-3xl font-black italic">
+                                        {Math.round((packingList.filter(i => i.checked).length / Math.max(1, packingList.length)) * 100)}%
+                                    </div>
+                                </div>
+
+                                {/* List Items */}
+                                <div className="space-y-3">
+                                    {packingList.map(item => (
+                                        <div key={item.id} className="group relative flex items-center gap-4">
+                                            <button 
+                                                onClick={() => togglePacking(item.id)} 
+                                                className={`flex-1 flex items-center gap-5 p-5 rounded-[1.5rem] border transition-all ${item.checked ? 'bg-slate-50 border-transparent opacity-60' : 'bg-white border-slate-100 shadow-sm'}`}
+                                            >
+                                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${item.checked ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg' : 'border-slate-200'}`}>
+                                                    {item.checked && <Icon name="check" size={12} strokeWidth={4} />}
+                                                </div>
+                                                <span className={`text-sm font-bold text-left flex-1 ${item.checked ? 'text-slate-300 line-through' : 'text-slate-900'}`}>{item.text}</span>
+                                            </button>
+                                            <button 
+                                                onClick={() => deletePackingItem(item.id)}
+                                                className="p-3 text-slate-200 hover:text-rose-500 transition-colors"
+                                            >
+                                                <Icon name="trash-2" size={16} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Add New Item */}
+                                <form onSubmit={addPackingItem} className="mt-8 flex gap-2 p-1 bg-white border border-slate-100 rounded-2xl shadow-sm focus-within:border-indigo-200 transition-colors">
+                                    <input 
+                                        type="text" 
+                                        value={newPackingText} 
+                                        onChange={(e) => setNewPackingText(e.target.value)}
+                                        placeholder="Add something to pack..." 
+                                        className="flex-1 px-5 py-3 text-sm font-medium placeholder:text-slate-300"
+                                    />
+                                    <button 
+                                        type="submit"
+                                        className="w-11 h-11 bg-black text-white rounded-xl flex items-center justify-center hover:bg-slate-800 transition-all active:scale-95"
+                                    >
+                                        <Icon name="plus" size={18} />
+                                    </button>
+                                </form>
                             </div>
                         )}
 
@@ -249,23 +311,6 @@
 
                         {activeTab === 'edit' && (
                             <div className="space-y-10 animate-fade-in pt-6 pb-10">
-                                {/* App Icon Setup Tutorial (這是您想找的地方) */}
-                                <section className="space-y-4">
-                                    <div className="flex items-center gap-2 border-b pb-2 text-indigo-500">
-                                        <Icon name="smartphone" size={14}/>
-                                        <h3 className="text-[10px] font-black uppercase tracking-widest">App Icon Setup</h3>
-                                    </div>
-                                    <div className="bg-indigo-50/50 rounded-2xl p-5 space-y-3">
-                                        <p className="text-[11px] leading-relaxed text-slate-600 font-medium">
-                                            要更換手機桌面圖示，請將一張正方形的照片命名為 <code className="bg-white px-1 rounded text-indigo-500">icon.png</code> 並上傳到您的 GitHub 根目錄。
-                                        </p>
-                                        <div className="bg-slate-900 rounded-xl p-4 text-[9px] text-indigo-200 overflow-x-auto font-mono">
-                                            {`<link rel="apple-touch-icon" href="/icon.png">`}
-                                        </div>
-                                        <p className="text-[10px] text-slate-400">完成後，在手機 Safari 點擊「加入主畫面」即可看到圖示。</p>
-                                    </div>
-                                </section>
-
                                 {/* Header Edit */}
                                 <section className="space-y-4">
                                     <div className="flex items-center gap-2 border-b pb-2 text-indigo-500">
@@ -280,17 +325,17 @@
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="space-y-1">
                                                 <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Itinerary Tab</span>
-                                                <input value={tripSettings.itineraryTitle} onChange={e => setTripSettings({...tripSettings, itineraryTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none uppercase" />
+                                                <input value={tripSettings.itineraryTitle} onChange={e => setTripSettings({...tripSettings, itineraryTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none" />
                                             </div>
                                             <div className="space-y-1">
                                                 <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Checklist Tab</span>
-                                                <input value={tripSettings.checklistTitle} onChange={e => setTripSettings({...tripSettings, checklistTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none uppercase" />
+                                                <input value={tripSettings.checklistTitle} onChange={e => setTripSettings({...tripSettings, checklistTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none" />
                                             </div>
                                         </div>
                                     </div>
                                 </section>
 
-                                {/* Itinerary Edit - 加大字體與 Header 一致 */}
+                                {/* Itinerary Edit */}
                                 <section className="space-y-6">
                                     <div className="flex items-center justify-between border-b pb-2 text-indigo-500">
                                         <div className="flex items-center gap-2">
