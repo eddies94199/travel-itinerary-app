@@ -66,10 +66,10 @@
             { id: 2, text: "國際駕照正本", checked: false },
         ];
 
-        // API 呼叫輔助函式 (包含指數退避)
+        // API 呼叫輔助函式 (包含 Google Maps 自動查詢)
         async function fetchGoogleMapsData(prevTitle, currentTitle) {
             const apiKey = "";
-            const systemPrompt = "你是一個旅遊導航專家。請根據 Google Maps 的數據，查詢兩個地點之間的開車距離（英里）和時間（分鐘）。請考慮洛杉磯一般的交通狀況。請嚴格僅以 JSON 格式回覆，格式如下：{\"distMi\": 數字, \"durationMin\": 數字}。如果地點不明確，請給出最合理的預估值。";
+            const systemPrompt = "你是一個旅遊導航專家。請根據 Google Maps 的數據，查詢兩個地點之間的開車距離（英里）和時間（分鐘）。請嚴格僅以 JSON 格式回覆，格式如下：{\"distMi\": 數字, \"durationMin\": 數字}。";
             const userQuery = `從「${prevTitle}」開車到「${currentTitle}」的距離和時間是多少？`;
 
             const callApi = async (retryCount = 0) => {
@@ -94,15 +94,12 @@
                             }
                         })
                     });
-                    
                     if (!response.ok) throw new Error('API request failed');
                     const result = await response.json();
-                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                    return JSON.parse(text);
+                    return JSON.parse(result.candidates?.[0]?.content?.parts?.[0]?.text);
                 } catch (error) {
                     if (retryCount < 5) {
-                        const delay = Math.pow(2, retryCount) * 1000;
-                        await new Promise(resolve => setTimeout(resolve, delay));
+                        await new Promise(r => setTimeout(r, Math.pow(2, retryCount) * 1000));
                         return callApi(retryCount + 1);
                     }
                     throw error;
@@ -130,6 +127,7 @@
             const [itinerary, setItinerary] = useState(INITIAL_ITINERARY);
             const [packingList, setPackingList] = useState(INITIAL_PACKING);
             const [newPackingText, setNewPackingText] = useState("");
+            const [weather, setWeather] = useState({ high: null, low: null, pop: null, status: 'loading' });
 
             const countdown = useMemo(() => {
                 const target = new Date('2026-06-16T21:10:00').getTime();
@@ -156,39 +154,65 @@
                         const day = nextItinerary[dIdx];
                         for (let i = 0; i < day.items.length; i++) {
                             const item = day.items[i];
-                            
-                            // 只有當前一個點跟這一個點都有 Title，且尚未計算或 Title 改變時才觸發
                             if (i > 0 && day.items[i-1].title && item.title) {
-                                const prev = day.items[i-1];
-                                const currentKey = `${prev.title}-${item.title}`;
-                                
+                                const currentKey = `${day.items[i-1].title}-${item.title}`;
                                 if (item.lastGoogleKey !== currentKey && item.title.length > 3) {
                                     setIsSyncing(true);
                                     try {
-                                        const data = await fetchGoogleMapsData(prev.title, item.title);
+                                        const data = await fetchGoogleMapsData(day.items[i-1].title, item.title);
                                         item.distMi = data.distMi;
                                         item.durationMin = data.durationMin;
                                         item.lastGoogleKey = currentKey;
                                         hasGlobalChanged = true;
-                                    } catch (e) { console.error("Google Sync Error:", e); }
+                                    } catch (e) { console.error(e); }
                                 }
-                            } else if (i === 0 && (item.distMi !== 0 || item.durationMin !== 0)) {
-                                item.distMi = 0;
-                                item.durationMin = 0;
-                                hasGlobalChanged = true;
                             }
                         }
                     }
-
-                    if (hasGlobalChanged) {
-                        setItinerary(nextItinerary);
-                    }
+                    if (hasGlobalChanged) setItinerary(nextItinerary);
                     setIsSyncing(false);
                 };
-
-                const timer = setTimeout(syncData, 2000); // 停止打字 2 秒後觸發同步
+                const timer = setTimeout(syncData, 3000);
                 return () => clearTimeout(timer);
             }, [itinerary]);
+
+            // --- 天氣自動抓取邏輯 (更新為扁平化佈局與最高/最低溫) ---
+            useEffect(() => {
+                const fetchWeather = async () => {
+                    const day = itinerary[selectedDayIdx];
+                    if (!day?.location) return;
+
+                    const tripDateStr = day.date.split(' ')[0].replace(/\//g, '-');
+                    const tripDate = new Date(tripDateStr);
+                    const today = new Date();
+                    const diffDays = Math.ceil((tripDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+                    if (diffDays > 14) {
+                        setWeather({ high: null, low: null, pop: null, status: 'upcoming' });
+                        return;
+                    }
+
+                    setWeather(prev => ({ ...prev, status: 'loading' }));
+                    try {
+                        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(day.location)}&limit=1`);
+                        const geoData = await geoRes.json();
+                        if (geoData && geoData[0]) {
+                            const { lat, lon } = geoData[0];
+                            const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1`);
+                            const weatherData = await weatherRes.json();
+                            setWeather({
+                                high: Math.round(weatherData.daily.temperature_2m_max[0]),
+                                low: Math.round(weatherData.daily.temperature_2m_min[0]),
+                                pop: `${weatherData.daily.precipitation_probability_max[0]}%`,
+                                status: 'ready'
+                            });
+                        }
+                    } catch (e) {
+                        setWeather(prev => ({ ...prev, status: 'error' }));
+                    }
+                };
+                fetchWeather();
+            }, [selectedDayIdx, itinerary[selectedDayIdx]?.location]);
 
             const updateDay = (idx, field, val) => {
                 const next = [...itinerary];
@@ -216,22 +240,20 @@
 
             const addDay = () => {
                 const nextNum = itinerary.length + 1;
-                setItinerary([...itinerary, { id: Date.now(), day: `Day ${nextNum}`, date: "2026/06/--", location: "New City", items: [] }]);
+                setItinerary([...itinerary, { id: Date.now(), day: `Day ${nextNum}`, date: "2026/06/--", location: "Los Angeles", items: [] }]);
             };
 
             const togglePacking = (id) => setPackingList(prev => prev.map(item => item.id === id ? { ...item, checked: !item.checked } : item));
-            
             const addPackingItem = (e) => {
                 if (e) e.preventDefault();
                 if (!newPackingText.trim()) return;
                 setPackingList([...packingList, { id: Date.now(), text: newPackingText, checked: false }]);
                 setNewPackingText("");
             };
-
             const deletePackingItem = (id) => setPackingList(packingList.filter(item => item.id !== id));
 
             return (
-                <div className="flex flex-col h-screen max-w-md mx-auto bg-white shadow-2xl overflow-hidden relative">
+                <div className="flex flex-col h-screen max-w-md mx-auto bg-white shadow-2xl overflow-hidden relative text-black">
                     {/* Header */}
                     <header className="px-8 pt-10 pb-6 z-10 bg-white border-b border-slate-50">
                         <div className="flex justify-between items-start mb-2">
@@ -267,31 +289,52 @@
                                         </button>
                                     ))}
                                 </div>
-                                <div className="space-y-3">
-                                    <div className="bg-slate-50 rounded-[2rem] p-7 border border-slate-100">
-                                        <div className="flex justify-between items-start text-black">
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-1.5 mb-2"><Icon name="map-pin" size={10} className="text-slate-400" /><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{itinerary[selectedDayIdx].location}</p></div>
-                                                <div className="flex items-center gap-4">
-                                                    <h3 className="text-4xl font-black tracking-tighter">72°F</h3>
-                                                    <div className="h-8 w-[1px] bg-slate-200"></div>
-                                                    <div>
-                                                        <div className="flex items-center gap-1 text-blue-500 font-black">
-                                                            <Icon name="droplets" size={12} />
-                                                            <span className="text-xs">10%</span>
-                                                        </div>
-                                                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Rain Prob.</p>
-                                                    </div>
+
+                                {/* 扁平化天氣區塊 */}
+                                <div className="bg-slate-50 rounded-2xl px-6 py-4 border border-slate-100 flex items-center justify-between">
+                                    <div className="flex items-center gap-6">
+                                        <div className="flex items-center gap-2">
+                                            <Icon name="map-pin" size={12} className="text-slate-300" />
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{itinerary[selectedDayIdx].location}</span>
+                                        </div>
+                                        
+                                        {weather.status === 'upcoming' ? (
+                                            <span className="text-xs font-bold text-slate-300 italic">尚未公佈預報</span>
+                                        ) : weather.status === 'ready' ? (
+                                            <div className="flex items-center gap-5">
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-lg font-black tracking-tighter">{weather.high}°</span>
+                                                    <span className="text-[10px] font-bold text-slate-300">/</span>
+                                                    <span className="text-sm font-bold text-slate-400 tracking-tighter">{weather.low}°</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <Icon name="droplets" size={11} className="text-blue-400" />
+                                                    <span className="text-xs font-black text-blue-500 tracking-tighter">{weather.pop}</span>
                                                 </div>
                                             </div>
-                                            <Icon name="sun" size={32} className="text-amber-400" />
-                                        </div>
+                                        ) : (
+                                            <div className="w-20 h-4 bg-slate-200 animate-pulse rounded"></div>
+                                        )}
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100"><div className="flex items-center gap-2 mb-1"><Icon name="clock" size={12} className="text-indigo-400" /><span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">總車程</span></div><p className="text-lg font-black tracking-tighter text-black">{dailyStats.time >= 60 ? `${Math.floor(dailyStats.time / 60)}h ${dailyStats.time % 60}m` : `${dailyStats.time}m`}</p></div>
-                                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100"><div className="flex items-center gap-2 mb-1"><Icon name="navigation" size={12} className="text-emerald-400" /><span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">總距離</span></div><p className="text-lg font-black tracking-tighter text-black">{dailyStats.dist} mi</p></div>
+                                    
+                                    <div className="flex items-center justify-center">
+                                        {weather.status === 'ready' ? (
+                                            <Icon 
+                                                name={parseInt(weather.pop) > 30 ? 'cloud-rain' : 'sun'} 
+                                                size={22} 
+                                                className={parseInt(weather.pop) > 30 ? 'text-blue-400' : 'text-amber-400'} 
+                                            />
+                                        ) : <div className="w-5 h-5 bg-slate-200 rounded-full"></div>}
                                     </div>
                                 </div>
+
+                                {/* 統計數據區塊 */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100"><div className="flex items-center gap-2 mb-1"><Icon name="clock" size={12} className="text-indigo-400" /><span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">總車程</span></div><p className="text-lg font-black tracking-tighter text-black">{dailyStats.time >= 60 ? `${Math.floor(dailyStats.time / 60)}h ${dailyStats.time % 60}m` : `${dailyStats.time}m`}</p></div>
+                                    <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100"><div className="flex items-center gap-2 mb-1"><Icon name="navigation" size={12} className="text-emerald-400" /><span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">總距離</span></div><p className="text-lg font-black tracking-tighter text-black">{dailyStats.dist} mi</p></div>
+                                </div>
+
+                                {/* 行程清單 */}
                                 <div className="space-y-10 pt-4 border-t border-slate-50">
                                     {itinerary[selectedDayIdx]?.items.map((item, idx) => (
                                         <div key={item.id} className="relative group animate-fade-in" style={{ animationDelay: `${idx * 0.1}s` }}><div className="flex items-start gap-5"><div className="pt-1 min-w-[45px]"><span className="text-[8px] font-black text-slate-200 uppercase block mb-1">Time</span><span className="text-xs font-bold text-black">{item.time}</span></div><div className="flex-1"><div className="flex items-center gap-2 mb-2">{item.distMi > 0 && <span className="text-[9px] font-bold text-slate-300 flex items-center gap-1"><Icon name="car" size={10} /> +{item.distMi} mi ({item.durationMin}m)</span>}</div><h4 className="text-lg font-extrabold tracking-tight mb-1 text-black leading-tight">{item.title || "未設定地點"}</h4><p className="text-xs text-slate-500 font-medium leading-relaxed mb-4">{item.desc}</p></div></div></div>
@@ -348,11 +391,11 @@
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="space-y-1">
                                                 <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Itinerary Tab</span>
-                                                <input value={tripSettings.itineraryTitle} onChange={e => setTripSettings({...tripSettings, itineraryTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none uppercase" />
+                                                <input value={tripSettings.itineraryTitle} onChange={e => setTripSettings({...tripSettings, itineraryTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none" />
                                             </div>
                                             <div className="space-y-1">
                                                 <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Checklist Tab</span>
-                                                <input value={tripSettings.checklistTitle} onChange={e => setTripSettings({...tripSettings, checklistTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none uppercase" />
+                                                <input value={tripSettings.checklistTitle} onChange={e => setTripSettings({...tripSettings, checklistTitle: e.target.value})} className="w-full bg-slate-50 rounded-xl p-3 text-xs font-bold border-none" />
                                             </div>
                                         </div>
                                     </div>
@@ -370,7 +413,7 @@
                                         <div key={day.id} className="bg-white border rounded-3xl p-6 space-y-4 shadow-sm relative text-black">
                                             <div className="flex gap-2">
                                                 <input value={day.day} onChange={e => updateDay(dIdx, 'day', e.target.value)} className="w-20 bg-slate-50 p-2 rounded-lg text-xs font-black border-none uppercase"/>
-                                                <input value={day.location} onChange={e => updateDay(dIdx, 'location', e.target.value)} className="flex-1 bg-slate-50 p-2 rounded-lg text-xs font-black border-none" placeholder="City Name"/>
+                                                <input value={day.location} onChange={e => updateDay(dIdx, 'location', e.target.value)} className="flex-1 bg-slate-50 p-2 rounded-lg text-xs font-black border-none" placeholder="City Name (for Weather)"/>
                                             </div>
                                             <input value={day.date} onChange={e => updateDay(dIdx, 'date', e.target.value)} className="w-full text-base font-bold border-b p-1 border-slate-100" placeholder="YYYY/MM/DD (週)"/>
                                             
@@ -382,14 +425,14 @@
                                                             <input value={item.title} onChange={e => updateItem(dIdx, iIdx, 'title', e.target.value)} className="flex-1 bg-white p-2 rounded-lg text-xs font-bold border border-slate-100" placeholder="Google Maps Location Name"/>
                                                         </div>
                                                         <textarea value={item.desc} onChange={e => updateItem(dIdx, iIdx, 'desc', e.target.value)} className="w-full bg-white p-3 rounded-lg text-xs border border-slate-100 h-16 resize-none" placeholder="Notes..."/>
-                                                        <div className="grid grid-cols-2 gap-2">
+                                                        <div className="grid grid-cols-2 gap-2 text-slate-400">
                                                             <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-100">
-                                                                <Icon name="car" size={12} className="text-slate-300"/>
-                                                                <input type="number" readOnly value={item.distMi} className="w-full bg-transparent border-none p-0 focus:ring-0 text-xs font-bold text-slate-400" placeholder="Auto Mi"/>
+                                                                <Icon name="car" size={12}/>
+                                                                <input type="number" readOnly value={item.distMi} className="w-full bg-transparent border-none p-0 focus:ring-0 text-xs font-bold" placeholder="Auto Mi"/>
                                                             </div>
                                                             <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-100">
-                                                                <Icon name="clock" size={12} className="text-slate-300"/>
-                                                                <input type="number" readOnly value={item.durationMin} className="w-full bg-transparent border-none p-0 focus:ring-0 text-xs font-bold text-slate-400" placeholder="Auto Min"/>
+                                                                <Icon name="clock" size={12}/>
+                                                                <input type="number" readOnly value={item.durationMin} className="w-full bg-transparent border-none p-0 focus:ring-0 text-xs font-bold" placeholder="Auto Min"/>
                                                             </div>
                                                         </div>
                                                         <button onClick={() => deleteItem(dIdx, iIdx)} className="absolute -top-2 -right-2 bg-white border rounded-full w-6 h-6 flex items-center justify-center text-rose-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="x" size={12}/></button>
