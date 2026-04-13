@@ -28,7 +28,11 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
+        // 將 SDK 賦值給 window 以便 Babel 腳本使用
         window.FirebaseSDK = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, getFirestore, doc, setDoc, onSnapshot, collection };
+        
+        // 觸發自定義事件通知 SDK 已就緒
+        window.dispatchEvent(new Event('firebase-ready'));
     </script>
     
     <style>
@@ -41,65 +45,28 @@
     </style>
 </head>
 <body class="bg-slate-50">
-    <div id="root"></div>
+    <div id="root">
+        <!-- 初始加載畫面 -->
+        <div class="flex flex-col items-center justify-center h-screen space-y-4">
+            <div class="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">正在啟動雲端助手...</p>
+        </div>
+    </div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
-        const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, getFirestore, doc, setDoc, onSnapshot, collection } = window.FirebaseSDK;
-
-        // --- Firebase 初始化 ---
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-trip';
-
-        const Icon = ({ name, size = 16, strokeWidth = 2, className = "" }) => {
-            useEffect(() => {
-                if (window.lucide) window.lucide.createIcons();
-            }, [name]);
-            return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
-        };
-
-        // API 輔助函式 (Google Maps 背景計算)
-        async function fetchGoogleMapsData(prevTitle, currentTitle) {
-            const apiKey = ""; 
-            const systemPrompt = "你是一個旅遊導航專家。請提供 Google Maps 上這兩個地點的開車距離(mi)與時間(min)。請考慮一般交通狀況。僅回傳 JSON 格式: {\"distMi\": 數字, \"durationMin\": 數字}";
-            const userQuery = `從「${prevTitle}」到「${currentTitle}」`;
-
-            const callApi = async (retryCount = 0) => {
-                try {
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{ parts: [{ text: userQuery }] }],
-                            systemInstruction: { parts: [{ text: systemPrompt }] },
-                            tools: [{ "google_search": {} }],
-                            generationConfig: { responseMimeType: "application/json" }
-                        })
-                    });
-                    if (!response.ok) throw new Error('API failed');
-                    const result = await response.json();
-                    return JSON.parse(result.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
-                } catch (error) {
-                    if (retryCount < 5) {
-                        await new Promise(r => setTimeout(r, Math.pow(2, retryCount) * 1000));
-                        return callApi(retryCount + 1);
-                    }
-                    return { distMi: 0, durationMin: 0 };
-                }
-            };
-            return callApi();
-        }
 
         function App() {
+            // 從 window 獲取 SDK，避免賽跑問題
+            const SDK = window.FirebaseSDK;
+            const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, getFirestore, doc, setDoc, onSnapshot } = SDK;
+
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState('itinerary');
             const [selectedDayIdx, setSelectedDayIdx] = useState(0);
             const [isSyncing, setIsSyncing] = useState(false);
             
-            // 初始狀態設定
+            // 狀態定義
             const [tripSettings, setTripSettings] = useState({
                 topLabel: "2026 LA TRIP",
                 itineraryTitle: "journey.",
@@ -115,19 +82,61 @@
             const [weather, setWeather] = useState({ high: null, low: null, pop: null, status: 'loading' });
             const [newPackingText, setNewPackingText] = useState("");
 
+            // --- Firebase 初始化 ---
+            const firebaseConfig = useMemo(() => {
+                try { return JSON.parse(__firebase_config); } catch(e) { return {}; }
+            }, []);
+            const app = useMemo(() => initializeApp(firebaseConfig), [firebaseConfig]);
+            const auth = useMemo(() => getAuth(app), [app]);
+            const db = useMemo(() => getFirestore(app), [app]);
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-trip';
+
+            const Icon = ({ name, size = 16, strokeWidth = 2, className = "" }) => {
+                useEffect(() => {
+                    if (window.lucide) window.lucide.createIcons();
+                }, [name]);
+                return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
+            };
+
+            // API 輔助函式 (Google Maps 背景計算)
+            async function fetchGoogleMapsData(prevTitle, currentTitle) {
+                const apiKey = ""; 
+                const systemPrompt = "你是一個導航專家。請提供 Google Maps 上這兩個地點的開車距離(mi)與時間(min)。僅回傳 JSON: {\"distMi\": 數字, \"durationMin\": 數字}";
+                const userQuery = `從「${prevTitle}」到「${currentTitle}」`;
+
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: userQuery }] }],
+                            systemInstruction: { parts: [{ text: systemPrompt }] },
+                            tools: [{ "google_search": {} }],
+                            generationConfig: { responseMimeType: "application/json" }
+                        })
+                    });
+                    const result = await response.json();
+                    return JSON.parse(result.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+                } catch (error) {
+                    return { distMi: 0, durationMin: 0 };
+                }
+            }
+
             // --- 認證流程 ---
             useEffect(() => {
                 const initAuth = async () => {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch(e) { console.error("Auth error", e); }
                 };
                 initAuth();
                 const unsubscribe = onAuthStateChanged(auth, setUser);
                 return () => unsubscribe();
-            }, []);
+            }, [auth]);
 
             // --- 雲端數據同步 ---
             useEffect(() => {
@@ -141,30 +150,25 @@
                         if (data.packingList) setPackingList(data.packingList);
                         if (data.usdAmount) setUsdAmount(data.usdAmount);
                         if (data.twdRate) setTwdRate(data.twdRate);
-                    } else {
-                        saveData(tripSettings, itinerary.length > 0 ? itinerary : [], packingList, usdAmount, twdRate);
                     }
-                }, (error) => {
-                    console.error("Firestore Error:", error);
-                });
+                }, (error) => console.error("Firestore Error:", error));
                 return () => unsubscribe();
-            }, [user]);
+            }, [user, db, appId]);
 
-            const saveData = async (settings, itin, pack, usd, twd) => {
+            const saveData = async (updates) => {
                 if (!user) return;
                 try {
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'tripStorage', 'mainData');
                     await setDoc(docRef, {
-                        tripSettings: settings || tripSettings,
-                        itinerary: itin || itinerary,
-                        packingList: pack || packingList,
-                        usdAmount: usd || usdAmount,
-                        twdRate: twd || twdRate,
+                        tripSettings,
+                        itinerary,
+                        packingList,
+                        usdAmount,
+                        twdRate,
+                        ...updates,
                         lastUpdated: Date.now()
-                    });
-                } catch (e) {
-                    console.error("Cloud Save Failed:", e);
-                }
+                    }, { merge: true });
+                } catch (e) { console.error("Cloud Save Failed:", e); }
             };
 
             const countdown = useMemo(() => {
@@ -207,7 +211,7 @@
                     }
                     if (changed) {
                         setItinerary(nextItin);
-                        saveData(null, nextItin, null, null, null);
+                        saveData({ itinerary: nextItin });
                     }
                     setIsSyncing(false);
                 }, 3000);
@@ -240,48 +244,57 @@
                 const next = [...itinerary];
                 next[idx][field] = val;
                 setItinerary(next);
-                saveData(null, next, null, null, null);
+                saveData({ itinerary: next });
             };
             const updateItem = (dIdx, iIdx, field, val) => {
                 const next = [...itinerary];
                 next[dIdx].items[iIdx][field] = val;
                 setItinerary(next);
-                saveData(null, next, null, null, null);
+                saveData({ itinerary: next });
             };
             const addItem = (dIdx) => {
                 const next = [...itinerary];
                 next[dIdx].items.push({ id: Date.now(), time: "12:00", title: "", desc: "", distMi: 0, durationMin: 0 });
                 setItinerary(next);
-                saveData(null, next, null, null, null);
+                saveData({ itinerary: next });
             };
             const deleteItem = (dIdx, iIdx) => {
                 const next = [...itinerary];
                 next[dIdx].items.splice(iIdx, 1);
                 setItinerary(next);
-                saveData(null, next, null, null, null);
+                saveData({ itinerary: next });
             };
             const addDay = () => {
                 const next = [...itinerary, { id: Date.now(), day: `Day ${itinerary.length + 1}`, date: "2026/06/--", location: "Los Angeles", items: [] }];
                 setItinerary(next);
-                saveData(null, next, null, null, null);
+                saveData({ itinerary: next });
             };
             const togglePacking = (id) => {
                 const next = packingList.map(item => item.id === id ? { ...item, checked: !item.checked } : item);
                 setPackingList(next);
-                saveData(null, null, next, null, null);
+                saveData({ packingList: next });
             };
             const addPackingItem = (e) => {
                 e.preventDefault(); if (!newPackingText.trim()) return;
                 const next = [...packingList, { id: Date.now(), text: newPackingText, checked: false }];
                 setPackingList(next);
                 setNewPackingText("");
-                saveData(null, null, next, null, null);
+                saveData({ packingList: next });
             };
             const deletePackingItem = (id) => {
                 const next = packingList.filter(item => item.id !== id);
                 setPackingList(next);
-                saveData(null, null, next, null, null);
+                saveData({ packingList: next });
             };
+
+            if (!user) {
+                return (
+                    <div className="flex flex-col items-center justify-center h-screen space-y-4">
+                        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">正在連接雲端數據...</p>
+                    </div>
+                );
+            }
 
             return (
                 <div className="flex flex-col h-screen max-w-md mx-auto bg-white shadow-2xl overflow-hidden relative text-black">
@@ -290,7 +303,7 @@
                         <div className="flex justify-between items-start mb-2">
                             <p className="text-[9px] font-black tracking-[0.3em] text-slate-300 uppercase leading-none">{tripSettings.topLabel}</p>
                             <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-50 rounded-full border border-indigo-100">
-                                <div className={`w-1.5 h-1.5 rounded-full ${isSyncing || !user ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`}></div>
+                                <div className={`w-1.5 h-1.5 rounded-full ${isSyncing ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`}></div>
                                 <span className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">{isSyncing ? 'Syncing...' : 'Cloud Active'}</span>
                             </div>
                         </div>
@@ -387,10 +400,10 @@
                             <div className="space-y-8 animate-fade-in pt-6">
                                 <div className="bg-slate-50 rounded-[2.5rem] p-10 space-y-10 border border-slate-100">
                                     <div className="space-y-4">
-                                        <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 lowercase">{tripSettings.utilitiesTitle}</p><div className="flex items-baseline gap-3"><span className="text-2xl font-black text-slate-300">$</span><input type="number" value={usdAmount} onChange={e => {setUsdAmount(e.target.value); saveData(null, null, null, e.target.value, null)}} className="w-full bg-transparent border-none text-6xl font-black tracking-tighter focus:ring-0 p-0 text-black outline-none" /></div></div>
+                                        <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 lowercase">{tripSettings.utilitiesTitle}</p><div className="flex items-baseline gap-3"><span className="text-2xl font-black text-slate-300">$</span><input type="number" value={usdAmount} onChange={e => {setUsdAmount(e.target.value); saveData({ usdAmount: e.target.value })}} className="w-full bg-transparent border-none text-6xl font-black tracking-tighter focus:ring-0 p-0 text-black outline-none" /></div></div>
                                         <div className="flex items-center gap-4 py-2 border-y border-slate-100/50">
                                             <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Rate</span>
-                                            <input type="number" step="0.1" value={twdRate} onChange={e => {setTwdRate(e.target.value); saveData(null, null, null, null, e.target.value)}} className="bg-transparent text-xs font-bold text-slate-400 w-16" />
+                                            <input type="number" step="0.1" value={twdRate} onChange={e => {setTwdRate(e.target.value); saveData({ twdRate: e.target.value })}} className="bg-transparent text-xs font-bold text-slate-400 w-16" />
                                             <div className="h-4 w-[1px] bg-slate-100"></div>
                                             <span className="text-[8px] font-bold text-slate-200 uppercase">Live from cloud</span>
                                         </div>
@@ -464,8 +477,20 @@
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        // 封裝渲染邏輯，等待 Firebase 就緒
+        function startApp() {
+            if (!window.FirebaseSDK) return;
+            const rootElement = document.getElementById('root');
+            const root = ReactDOM.createRoot(rootElement);
+            root.render(<App />);
+        }
+
+        // 監聽 SDK 就緒事件或立即啟動
+        if (window.FirebaseSDK) {
+            startApp();
+        } else {
+            window.addEventListener('firebase-ready', startApp);
+        }
     </script>
 </body>
 </html>
